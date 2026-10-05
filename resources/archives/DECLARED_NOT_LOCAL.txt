@@ -1,0 +1,5 @@
+The project owner reported having full copies of OpenHands, Nanobot and OpenJarvis.
+Those archives were not present in the local filesystem used to build this master
+bundle, so they are deliberately NOT fabricated or represented as bundled files.
+They should be added later under resources/archives/upstream/ after the exact
+archives are available and their license/commit provenance is recorded.

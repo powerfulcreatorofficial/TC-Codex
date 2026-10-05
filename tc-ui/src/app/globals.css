@@ -1,0 +1,236 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Engineering TC — Design Token System
+ * Green / mint / teal identity. Light, premium, futuristic foundation.
+ * Colors stored as space-separated RGB channels so Tailwind alpha modifiers work.
+ */
+
+:root {
+  /* ---- Identity ---- */
+  --c-tc: 53 229 140; /* #35E58C — vivid intelligent green */
+  --c-emerald: 11 143 98; /* #0B8F62 — deep emerald */
+  --c-mint: 143 255 208; /* #8FFFD0 — mint */
+  --c-teal: 37 199 181; /* #25C7B5 — teal */
+  --c-lime: 200 255 120; /* restrained lime accent */
+
+  /* ---- Semantic ---- */
+  --c-success: 74 222 128; /* #4ADE80 */
+  --c-warning: 251 191 36; /* #FBBF24 */
+  --c-error: 255 107 107; /* #FF6B6B */
+
+  /* ---- Surfaces / text (light neutral foundation — NOT pure black) ---- */
+  --c-bg: 244 251 247; /* #F4FBF7 — warm off-white / very pale mint */
+  --c-surface: 255 255 255; /* #FFFFFF — elevated surfaces */
+  --c-surface-2: 248 252 250; /* subtle raised surface */
+  --c-text: 16 35 27; /* #10231B — dark charcoal-green text */
+  --c-text-secondary: 84 112 102; /* #547066 */
+  --c-text-muted: 120 145 134;
+  --c-border: 16 35 27; /* used with low alpha */
+  --c-border-strong: 16 35 27;
+
+  /* alpha-encoded borders (precomputed) */
+  --border: rgb(16 35 27 / 0.09);
+  --border-strong: rgb(16 35 27 / 0.16);
+
+  /* soft green wash */
+  --soft-green: rgb(53 229 140 / 0.14);
+
+  /* ---- Radii (moderate, premium — not excessive) ---- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-2xl: 28px;
+  --r-pill: 9999px;
+
+  /* ---- Spacing scale ---- */
+  --s-0-5: 2px;
+  --s-1: 4px;
+  --s-1-5: 6px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+  --s-16: 64px;
+  --s-18: 72px;
+  --s-22: 88px;
+
+  /* ---- Shadows (restrained, premium) ---- */
+  --sh-xs: 0 1px 2px rgb(16 35 27 / 0.04);
+  --sh-sm: 0 1px 2px rgb(16 35 27 / 0.05), 0 1px 3px rgb(16 35 27 / 0.04);
+  --sh-md: 0 4px 12px rgb(16 35 27 / 0.06), 0 2px 4px rgb(16 35 27 / 0.04);
+  --sh-lg: 0 12px 32px rgb(16 35 27 / 0.08), 0 4px 8px rgb(16 35 27 / 0.04);
+  --sh-glow: 0 0 0 3px rgb(53 229 140 / 0.18); /* restrained green focus/identity glow */
+
+  /* ---- Typography ---- */
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  --fs-2xl: 24px;
+  --fs-3xl: 32px;
+  --fs-4xl: 44px;
+  --lh-tight: 1.15;
+  --lh-snug: 1.3;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.65;
+  --tracking-tight: -0.02em;
+  --tracking-tighter: -0.035em;
+
+  /* ---- Motion ---- */
+  --d-micro: 150ms;
+  --d-fast: 220ms;
+  --d-base: 300ms;
+  --d-slow: 420ms;
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- z-index ---- */
+  --z-base: 1;
+  --z-sticky: 100;
+  --z-dropdown: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: rgb(var(--c-bg));
+    color: rgb(var(--c-text));
+    font-family: var(--font-sans);
+    font-size: var(--fs-base);
+    line-height: var(--lh-normal);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  /* Visible, consistent focus ring — accessibility */
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-tc));
+    outline-offset: 2px;
+    border-radius: var(--r-sm);
+  }
+
+  /* Respect reduced motion: disable decorative animation, retain state changes */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Safe-area support for mobile */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--c-border-strong)) transparent;
+  }
+  /* The signature gradient is reserved for small identity elements / the Orb */
+  .tc-gradient {
+    background-image: linear-gradient(
+      135deg,
+      rgb(var(--c-tc)) 0%,
+      rgb(var(--c-mint)) 55%,
+      rgb(var(--c-teal)) 100%
+    );
+  }
+  .tc-text-gradient {
+    background-image: linear-gradient(120deg, rgb(var(--c-emerald)), rgb(var(--c-tc)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+/* Dark mode — same TC identity, deeper engineering surfaces. */
+:root[data-theme="dark"] {
+  --c-bg: 8 18 14;
+  --c-surface: 13 26 20;
+  --c-surface-2: 18 37 28;
+  --c-text: 235 250 243;
+  --c-text-secondary: 163 193 179;
+  --c-text-muted: 112 142 128;
+  --c-border: 178 217 200;
+  --c-border-strong: 206 236 222;
+  --border: rgb(178 217 200 / 0.10);
+  --border-strong: rgb(206 236 222 / 0.18);
+  --soft-green: rgb(53 229 140 / 0.13);
+  --sh-xs: 0 1px 2px rgb(0 0 0 / 0.18);
+  --sh-sm: 0 2px 8px rgb(0 0 0 / 0.18);
+  --sh-md: 0 8px 22px rgb(0 0 0 / 0.22);
+  --sh-lg: 0 18px 44px rgb(0 0 0 / 0.30);
+}
+
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at 15% 0%, rgb(53 229 140 / 0.07), transparent 28rem),
+    radial-gradient(circle at 85% 10%, rgb(37 199 181 / 0.05), transparent 25rem),
+    rgb(var(--c-bg));
+}
+
+.tc-command-grid {
+  opacity: 0.34;
+  background-image:
+    linear-gradient(rgb(var(--c-tc) / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--c-tc) / 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(to bottom, black, transparent 80%);
+}
+
+.tc-noise::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+}

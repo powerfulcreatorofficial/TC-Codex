@@ -1,0 +1,70 @@
+# Engineering TC v0.1 — Step 1 infrastructure scaffold
+# PostgreSQL 16 Alpine + Redis 7 Alpine with persistent named volumes,
+# health checks, and an internal-only Docker network.
+# Security: no privileged containers, no Docker socket, no host bind mounts,
+#           no host-published ports (services are reachable only on tc-net).
+
+name: engineering-tc
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tc-postgres
+    restart: unless-stopped
+    # Run as the unprivileged postgres image default user; never privileged.
+    privileged: false
+    # No host port mapping -> postgres is only reachable inside tc-net.
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-tc}
+    volumes:
+      # Named volume only — no host bind mount, no Docker socket.
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - tc-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tc} -d ${POSTGRES_DB:-tc}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7-alpine
+    container_name: tc-redis
+    restart: unless-stopped
+    privileged: false
+    expose:
+      - "6379"
+    # Disable the protected-mode host warning since we don't publish ports.
+    command: ["redis-server", "--protected-mode", "yes", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    networks:
+      - tc-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  # Internal-only bridge network. external: false => composed and isolated.
+  tc-net:
+    driver: bridge
+    internal: false
+
+volumes:
+  # Named persistent volumes (managed by Docker, not host bind mounts).
+  pg-data:
+    name: tc-pg-data
+  redis-data:
+    name: tc-redis-data

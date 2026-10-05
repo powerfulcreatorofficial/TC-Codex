@@ -1,0 +1,7 @@
+# Core runtime is declared in pyproject.toml.
+# Optional engineering extras:
+# pip install trimesh
+# pip install pyvista
+# pip install deepxde
+# pip install vllm  # use a hardware-appropriate deployment environment
+# pip install nvidia-physicsnemo  # package/deployment can vary by released stack

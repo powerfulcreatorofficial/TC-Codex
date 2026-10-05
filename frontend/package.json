@@ -1,0 +1,24 @@
+{
+  "name": "tc-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Engineering TC Next.js/TypeScript frontend (Step 1 scaffold)",
+  "scripts": {
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "build": "next build"
+  },
+  "dependencies": {
+    "next": "14.2.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "typescript": "5.5.4",
+    "@types/node": "20.14.10",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "eslint": "8.57.0",
+    "eslint-config-next": "14.2.5"
+  }
+}

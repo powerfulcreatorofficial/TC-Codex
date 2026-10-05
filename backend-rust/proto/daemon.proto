@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package tc.daemon.v1;
+
+// Workspace Daemon API.
+// All filesystem paths are interpreted relative to the daemon's configured
+// workspace root. Paths that escape the workspace root are rejected.
+service WorkspaceDaemon {
+  // Read a file (optionally a bounded chunk) from the workspace root.
+  rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
+
+  // Atomically write a file using compare-and-set on the current SHA-256.
+  rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
+
+  // Execute a command inside the workspace sandbox with an explicit timeout.
+  rpc ExecCommand(ExecCommandRequest) returns (ExecCommandResponse);
+
+  // Create a git branch for TC changes (fails if it would clobber work).
+  rpc GitCreateBranch(GitCreateBranchRequest) returns (GitCreateBranchResponse);
+
+  // Report the git status of the workspace.
+  rpc GitStatus(GitStatusRequest) returns (GitStatusResponse);
+
+  // Commit staged/specified changes safely.
+  rpc GitCommit(GitCommitRequest) returns (GitCommitResponse);
+}
+
+message ReadFileRequest {
+  string path = 1;
+  // Optional: byte offset to start reading from (0-based). Defaults to 0.
+  uint64 offset = 2;
+  // Optional: maximum number of bytes to read. 0 = unbounded (full file).
+  uint64 length = 3;
+}
+
+message ReadFileResponse {
+  bytes content = 1;
+  // SHA-256 of the *full* file contents (independent of chunking).
+  string sha256 = 2;
+  uint64 total_size = 3;
+  bool truncated = 4;
+}
+
+message WriteFileRequest {
+  string path = 1;
+  bytes content = 2;
+  // Expected SHA-256 of the file's CURRENT contents. The write is refused if
+  // this does not match (compare-and-set / optimistic concurrency).
+  // For a new/empty file use the SHA-256 of the empty string.
+  string expected_hash = 3;
+}
+
+message WriteFileResponse {
+  // SHA-256 of the file contents after the write succeeded.
+  string sha256 = 1;
+  bool written = 2;
+}
+
+message ExecCommandRequest {
+  // Command to run, e.g. ["cargo", "test"].
+  repeated string argv = 1;
+  // Required: maximum execution time in seconds. Must be > 0.
+  uint64 timeout_seconds = 2;
+}
+
+message ExecCommandResponse {
+  int32 exit_code = 1;
+  // "completed" | "timeout" | "failed_to_start"
+  string status = 2;
+  bytes stdout = 3;
+  bytes stderr = 4;
+  uint64 duration_ms = 5;
+}
+
+message GitCreateBranchRequest {
+  string branch_name = 1;
+  // If true, create from the current HEAD. Otherwise branch from the default
+  // branch (main/master) to isolate TC changes from in-progress work.
+  bool from_head = 2;
+}
+
+message GitCreateBranchResponse {
+  string branch_name = 1;
+  bool created = 2;
+  string message = 3;
+}
+
+message GitStatusRequest {}
+
+message GitStatusEntry {
+  string path = 1;
+  // "modified" | "added" | "deleted" | "untracked" | "renamed" | "conflicted"
+  string status = 2;
+}
+
+message GitStatusResponse {
+  string branch = 1;
+  bool clean = 2;
+  repeated GitStatusEntry entries = 3;
+}
+
+message GitCommitRequest {
+  string message = 1;
+  // Paths to stage before committing. Empty = commit already-staged changes.
+  repeated string paths = 2;
+}
+
+message GitCommitResponse {
+  string commit_hash = 1;
+  bool committed = 2;
+  string message = 3;
+}
