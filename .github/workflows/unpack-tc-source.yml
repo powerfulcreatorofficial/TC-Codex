@@ -1,0 +1,71 @@
+name: Unpack TC ENGINEERING AI Source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Find and extract TC source ZIP
+        shell: bash
+        run: |
+          set -e
+
+          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No ZIP file found in repository root."
+            exit 1
+          fi
+
+          echo "Found: $ZIP_FILE"
+
+          rm -rf _tc_extract
+          mkdir _tc_extract
+
+          unzip -q "$ZIP_FILE" -d _tc_extract
+
+          ROOT_DIR=$(find _tc_extract -mindepth 1 -maxdepth 1 -type d | head -n 1)
+
+          if [ -z "$ROOT_DIR" ]; then
+            echo "ERROR: Could not find extracted source directory."
+            exit 1
+          fi
+
+          echo "Source directory: $ROOT_DIR"
+
+          cp -a "$ROOT_DIR"/. .
+
+          rm -rf _tc_extract
+          rm -f "$ZIP_FILE"
+
+      - name: Show extracted source
+        run: |
+          echo "===== TC SOURCE TREE ====="
+          find . -maxdepth 2 -type f | sort | head -n 300
+
+      - name: Commit extracted source
+        shell: bash
+        run: |
+          set -e
+
+          git config user.name "TC Source Extractor"
+          git config user.email "actions@github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Extract TC ENGINEERING AI source"
+          git push
