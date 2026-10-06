@@ -76,6 +76,14 @@ def assemble_project_context(
                 f"- step={step.get('id')} title={step.get('title')} "
                 f"verify={step.get('verification')} risk={step.get('risk', 'low')}"
             )
+        criteria = plan.get("acceptance_criteria") or []
+        if criteria:
+            lines.append("acceptance_criteria:")
+            lines.extend(f"- {item}" for item in criteria)
+        risks = plan.get("risks") or []
+        if risks:
+            lines.append("risks:")
+            lines.extend(f"- {item}" for item in risks)
         sections.append(("approved_plan", "\n".join(lines)))
 
     if not sections:

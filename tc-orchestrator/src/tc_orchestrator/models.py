@@ -38,18 +38,28 @@ class ToolCallRequest(BaseModel):
 
 
 class ToolResult(BaseModel):
-    """The structured result returned to the Brain after a tool executes."""
+    """The structured result returned to the Brain after a tool executes.
+
+    ``ok`` must reflect the real outcome: a command that completed with a
+    non-zero exit code is NOT ok. ``exit_code`` is carried explicitly so the
+    orchestration layers never have to re-parse output text to learn it.
+    """
 
     name: str
     ok: bool
     output: str
     error: str | None = None
+    exit_code: int | None = None
+    truncated: bool = False
 
     def as_tool_message(self) -> ChatMessage:
         return ChatMessage(role="tool", content=self.to_compact(), name=self.name)
 
     def to_compact(self) -> str:
-        parts = [f"ok={self.ok}", self.output]
+        parts = [f"ok={self.ok}"]
+        if self.exit_code is not None:
+            parts.append(f"exit_code={self.exit_code}")
+        parts.append(self.output)
         if self.error:
             parts.append(f"error={self.error}")
         return " | ".join(parts)

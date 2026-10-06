@@ -16,7 +16,7 @@ Plus a polyglot scaffold so the Step 1 static checks can run:
 
 - `backend-rust/` — Rust crate (`cargo fmt`, `cargo check`).
 - `services-python/` — Python package (`ruff`).
-- `frontend/` — Next.js 14 / TypeScript app (`next lint`, `tsc`).
+- `tc-ui/` — Next.js 14 / TypeScript app (`next lint`, `tsc`).
 
 ## Quick start
 
@@ -52,3 +52,26 @@ TC now supports a plan-first workflow: create a deterministic structured plan, r
 TC now defaults its primary Brain configuration to Qwen3.8-27B, supports an explicitly enabled higher brain (default model `gpt-6-astra`), and routes deterministically based on observable execution difficulty. Higher-brain usage is bounded by per-task call/USD limits and surfaced through `GET /v1/tasks/{task_id}/brain` and `GET /v1/brain`.
 
 The higher brain is disabled by default and no secret is exposed by the routing-status API. Native GPT-6 Astra Responses API tool semantics are intentionally not claimed by this phase; use a compatible endpoint until the dedicated Responses adapter is added.
+
+## Cybertron — the engineering capability inside TC
+
+TC now routes engineering work through **Cybertron**
+(`tc-orchestrator/src/tc_orchestrator/cybertron/`), a bounded, evidence-based
+engineering state machine:
+
+```
+TC → Cybertron.execute(task)
+     ORIENT → PLAN → APPROVE → ACT → OBSERVE → VERIFY → REVIEW → REPAIR* → REPORT
+```
+
+- Deterministic verification is a hard gate; a failing test/command can never
+  be reported as success (final statuses: SUCCESS / PARTIAL / FAILED / BLOCKED).
+- Model plans are proposals only — validated against hard rules before any
+  execution; repository content is treated as untrusted data.
+- Sandboxed execution: scrubbed env, process-group kill, rlimits, output caps,
+  network off by default; honest isolation reporting (no fake sandbox claims).
+- Hardened Git (hooks/config neutralized, safe argument boundaries), budgets
+  enforced before every model call, independent read-only review.
+- HTTP surface: `/v1/cybertron/*`.
+
+See `docs/CYBERTRON.md` for the full architecture and security model.

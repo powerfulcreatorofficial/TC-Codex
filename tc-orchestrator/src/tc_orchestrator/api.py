@@ -183,6 +183,11 @@ def create_app(
     app = FastAPI(title="Engineering TC Orchestrator", version="0.3.0")
     app.include_router(master_router)
 
+    # Cybertron — the engineering capability inside TC (TC -> Cybertron.execute).
+    from .cybertron_api import build_cybertron_router
+
+    app.include_router(build_cybertron_router(settings))
+
     def _fail(task_id: str, error: str) -> TaskSummary:
         """Never report success on persistence failure; mark FAILED safely."""
         try:
@@ -858,7 +863,8 @@ def create_app(
                         "result_metadata": event.get("result_metadata"),
                         "status": event.get("status"),
                     }
-                    yield f"id: {event_id}\ndata: {json.dumps(payload, separators=(",", ":"))}\n\n"
+                    data = json.dumps(payload, separators=(",", ":"))
+                    yield f"id: {event_id}\ndata: {data}\n\n"
                 current = store.get(task_id)
                 if current is None or current.status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
                     return

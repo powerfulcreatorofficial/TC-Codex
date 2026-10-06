@@ -134,15 +134,40 @@ def _handle_write_file(client: WorkspaceClient, args: dict[str, Any]) -> ToolRes
     return ToolResult(name="write_file", ok=True, output=f"written sha256={res.sha256}")
 
 
+_MAX_EXEC_OUTPUT_CHARS = 32_000
+
+
+def _cap(text: str, limit: int) -> tuple[str, bool]:
+    if len(text) <= limit:
+        return text, False
+    return text[:limit] + f"\n...[truncated {len(text) - limit} chars]", True
+
+
 def _handle_exec_command(client: WorkspaceClient, args: dict[str, Any]) -> ToolResult:
     a = ExecCommandArgs.model_validate(args)
     res = client.exec_command(a.argv, a.timeout_seconds)
-    ok = res.status == "completed"
+    # Truthful outcome: a command is only "ok" when it both completed AND
+    # exited 0. A failing test run must remain a failure.
+    ok = res.status == "completed" and res.exit_code == 0
+    stdout, t1 = _cap(res.stdout_text, _MAX_EXEC_OUTPUT_CHARS // 2)
+    stderr, t2 = _cap(res.stderr_text, _MAX_EXEC_OUTPUT_CHARS // 2)
     out = (
         f"status={res.status} exit_code={res.exit_code} duration_ms={res.duration_ms}\n"
-        f"--- stdout ---\n{res.stdout_text}\n--- stderr ---\n{res.stderr_text}"
+        f"--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}"
     )
-    return ToolResult(name="exec_command", ok=ok, output=out)
+    error = None
+    if res.status != "completed":
+        error = f"command did not complete: status={res.status}"
+    elif res.exit_code != 0:
+        error = f"command exited with non-zero code {res.exit_code}"
+    return ToolResult(
+        name="exec_command",
+        ok=ok,
+        output=out,
+        error=error,
+        exit_code=res.exit_code,
+        truncated=t1 or t2,
+    )
 
 
 def _handle_git_status(client: WorkspaceClient, args: dict[str, Any]) -> ToolResult:
@@ -263,7 +288,10 @@ def default_registry() -> ToolRegistry:
     reg.register(
         Tool(
             name="exec_command",
-            description="Execute a command inside the workspace sandbox with an explicit timeout.",
+            description=(
+                "Execute a command through the workspace daemon (cwd-confined, "
+                "env-cleared; NOT a kernel-level sandbox) with an explicit timeout."
+            ),
             args_model=ExecCommandArgs,
             permission=Permission.L1,
             read_only=False,
