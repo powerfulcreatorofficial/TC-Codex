@@ -187,3 +187,54 @@ def test_approval_denied_blocks(repo_root, monkeypatch):
     data = wait_done(c, task_id)
     assert data["status"] == "BLOCKED"
     assert "note.txt" not in data["changed_files"]
+
+
+def test_status_reports_exec_policy_and_mode(repo_root):
+    app = create_app(settings=make_settings())
+    c = TestClient(app)
+    data = c.get("/v1/cybertron/status").json()
+    assert data["approval_policy"] == "untrusted"  # default, fail closed
+    assert data["sandbox_mode"] == "workspace-write"
+    assert data["agentic_available"] is False  # no brain configured
+    assert data["sessions_dir"]
+
+    # No brain configured => agentic mode must be refused honestly.
+    r = c.post("/v1/cybertron/tasks", json={
+        "objective": "x", "workspace_path": "demo", "mode": "agentic",
+    })
+    assert r.status_code == 400
+    assert "agentic mode requires" in r.json()["detail"]
+
+    # Invalid mode rejected by schema.
+    r = c.post("/v1/cybertron/tasks", json={
+        "objective": "x", "workspace_path": "demo", "mode": "bogus",
+    })
+    assert r.status_code == 422
+
+
+def test_sessions_recorded_and_listable(repo_root):
+    app = create_app(settings=make_settings())
+    c = TestClient(app)
+    r = c.post("/v1/cybertron/tasks", json={
+        "objective": "run checks",
+        "workspace_path": "demo",
+        "verification_commands": [["python3", "-m", "pytest", "-q", "tests"]],
+    })
+    body = r.json()
+    assert body["mode"] == "plan"  # auto falls back without a brain
+    task_id = body["task_id"]
+    wait_done(c, task_id)
+
+    sessions = c.get("/v1/cybertron/sessions").json()
+    ids = [s["task_id"] for s in sessions]
+    assert task_id in ids
+    mine = next(s for s in sessions if s["task_id"] == task_id)
+    assert mine["final_status"] in ("SUCCESS", "FAILED", "BLOCKED")
+
+    rollout = c.get(f"/v1/cybertron/sessions/{task_id}").json()
+    assert rollout[0]["type"] == "meta"
+    assert rollout[0]["objective"] == "run checks"
+    assert any(line.get("type") == "report" for line in rollout)
+
+    missing = c.get("/v1/cybertron/sessions/nope")
+    assert missing.status_code == 404

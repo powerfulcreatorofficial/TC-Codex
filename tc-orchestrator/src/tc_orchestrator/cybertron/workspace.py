@@ -306,6 +306,21 @@ class SafeWorkspace:
             return None
         return hashlib.sha256(p.read_bytes()).hexdigest()
 
+    def delete_file(self, rel_path: str) -> bool:
+        """Delete a regular file inside the workspace (never directories,
+        never through symlinks)."""
+        p = self.resolve(rel_path, must_exist=True)
+        if not p.is_file():
+            raise WorkspaceSecurityError(f"not a regular file: {rel_path}")
+        p.unlink()
+        return True
+
+    def exists(self, rel_path: str) -> bool:
+        try:
+            return self.resolve(rel_path).exists()
+        except WorkspaceSecurityError:
+            return False
+
 
 # ----------------------------------------------------------------------
 # unified diff parsing / application (no external deps)

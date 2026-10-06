@@ -23,11 +23,14 @@ class CybertronTaskRequest(BaseModel):
     project_id: str | None = None
     verification_commands: list[list[str]] = Field(default_factory=list, max_length=8)
     require_approval: bool | None = None
+    # "auto": agentic when a Cybertron brain is configured, else plan mode.
+    mode: str = Field(default="auto", pattern="^(auto|agentic|plan)$")
 
 
 class CybertronTaskOut(BaseModel):
     task_id: str
     state: str
+    mode: str = "plan"
     objective: str
     status: str | None = None
     summary: str | None = None
@@ -58,6 +61,7 @@ def _task_out(state: CybertronTaskState) -> CybertronTaskOut:
     return CybertronTaskOut(
         task_id=state.task_id,
         state=state.state,
+        mode=state.mode,
         objective=state.objective,
         status=report.status.value if report else None,
         summary=report.summary if report else state.error,
@@ -77,10 +81,17 @@ def build_cybertron_router(settings: Settings) -> APIRouter:
 
     @router.get("/status")
     def status() -> dict[str, Any]:
+        from .cybertron_service import loop_config_from_env, tool_brain_from_settings
+
+        loop_cfg = loop_config_from_env()
         return {
             "subsystem": "cybertron",
             "workspace_root": str(service.workspace_root),
             "require_approval_default": settings.require_approval,
+            "agentic_available": tool_brain_from_settings(settings) is not None,
+            "approval_policy": loop_cfg.approval_policy.value,
+            "sandbox_mode": loop_cfg.sandbox_mode.value,
+            "sessions_dir": str(service.sessions.directory) if service.sessions else None,
             "stages": [
                 "ORIENT", "PLAN", "APPROVE", "ACT", "OBSERVE",
                 "VERIFY", "REVIEW", "REPAIR", "REPORT",
@@ -96,6 +107,7 @@ def build_cybertron_router(settings: Settings) -> APIRouter:
                 project_id=req.project_id,
                 verification_commands=req.verification_commands or None,
                 require_approval=req.require_approval,
+                mode=req.mode,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -131,6 +143,30 @@ def build_cybertron_router(settings: Settings) -> APIRouter:
             )
             for a in service.approvals.list_pending()
         ]
+
+    @router.get("/sessions")
+    def list_sessions(limit: int = 50) -> list[dict[str, Any]]:
+        if service.sessions is None:
+            return []
+        return [
+            {
+                "task_id": s.task_id,
+                "created_at": s.created_at,
+                "objective": s.objective,
+                "final_status": s.final_status,
+                "event_count": s.event_count,
+            }
+            for s in service.sessions.list_sessions(limit=limit)
+        ]
+
+    @router.get("/sessions/{task_id}")
+    def get_session(task_id: str) -> list[dict[str, Any]]:
+        if service.sessions is None:
+            raise HTTPException(status_code=404, detail="session recording disabled")
+        lines = service.sessions.load(task_id)
+        if not lines:
+            raise HTTPException(status_code=404, detail="unknown session")
+        return lines
 
     @router.post("/approvals/{approval_id}")
     def decide(approval_id: str, req: CybertronDecisionRequest) -> dict[str, Any]:

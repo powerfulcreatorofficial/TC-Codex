@@ -143,6 +143,10 @@ class CybertronToolset:
         self._handlers: dict[str, Callable[[BaseModel], ToolOutcome]] = {}
         self._register_all()
 
+    @property
+    def workspace(self) -> SafeWorkspace:
+        return self._ws
+
     # ------------------------------------------------------------------
 
     def specs(self) -> list[ToolSpec]:
@@ -267,7 +271,8 @@ class CybertronToolset:
                   "Find function/class/type definitions by name pattern.",
                   SymbolArgs, self._t_symbols, read_only=True)
         self._reg("apply_patch", CapabilityLevel.L2,
-                  "Apply a unified diff to workspace files (preferred edit mechanism).",
+                  "Apply a patch: Codex apply_patch envelope (*** Begin Patch ...) "
+                  "or a classic unified diff (preferred edit mechanism).",
                   PatchArgs, self._t_patch, read_only=False)
         self._reg("write_file", CapabilityLevel.L2,
                   "Atomically write a whole file (CAS-protected when hash given).",
@@ -345,7 +350,9 @@ class CybertronToolset:
         return ToolOutcome(tool="find_symbols", level=CapabilityLevel.L1, ok=True, output=out)
 
     def _t_patch(self, a: PatchArgs) -> ToolOutcome:
-        changed = self._ws.apply_patch(a.patch)
+        from .apply_patch import apply_any_patch
+
+        changed = apply_any_patch(self._ws, a.patch)
         return ToolOutcome(
             tool="apply_patch", level=CapabilityLevel.L2, ok=True,
             output="patched: " + ", ".join(changed), data={"changed_files": changed},

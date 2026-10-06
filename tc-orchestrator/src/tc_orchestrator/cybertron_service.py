@@ -24,8 +24,14 @@ from typing import Any
 from .brain import Brain, OpenAICompatibleBrain
 from .config import Settings
 from .cybertron import (
+    AgentLoopConfig,
+    ApprovalPolicy,
     Cybertron,
     EngineConfig,
+    ModelToolCall,
+    ModelTurn,
+    SandboxMode,
+    SessionRecorder,
     TaskBudget,
     TaskReport,
 )
@@ -93,6 +99,59 @@ def proposer_from_settings(settings: Settings) -> BrainPlanProposer | None:
     if not base_url or not api_key:
         return None
     return BrainPlanProposer(OpenAICompatibleBrain(base_url, api_key, model))
+
+
+class ToolBrainAdapter:
+    """Adapts the provider-independent Brain protocol into the agent loop's
+    ToolBrain contract (Codex-style iterative tool calling)."""
+
+    def __init__(self, brain: Brain) -> None:
+        self._brain = brain
+
+    def turn(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> ModelTurn:
+        chat_messages = [
+            ChatMessage(
+                role=str(m.get("role")),
+                content=m.get("content"),
+                tool_calls=m.get("tool_calls"),
+                name=m.get("name"),
+                tool_call_id=m.get("tool_call_id"),
+            )
+            for m in messages
+        ]
+        resp = self._brain.chat(chat_messages, tools)
+        calls = [
+            ModelToolCall(
+                id=tc.get("id") or f"call-{i}",
+                name=tc.get("name") or "",
+                arguments=tc.get("arguments") or {},
+            )
+            for i, tc in enumerate(resp.tool_calls)
+        ]
+        return ModelTurn(content=resp.content, tool_calls=calls)
+
+
+def tool_brain_from_settings(settings: Settings) -> ToolBrainAdapter | None:
+    base_url = os.environ.get("CYBERTRON_BRAIN_BASE_URL") or settings.brain_base_url
+    api_key = os.environ.get("CYBERTRON_BRAIN_API_KEY") or settings.brain_api_key
+    model = os.environ.get("CYBERTRON_BRAIN_MODEL") or settings.brain_model
+    if not base_url or not api_key:
+        return None
+    return ToolBrainAdapter(OpenAICompatibleBrain(base_url, api_key, model))
+
+
+def loop_config_from_env() -> AgentLoopConfig:
+    policy_raw = (os.environ.get("CYBERTRON_APPROVAL_POLICY") or "untrusted").strip().lower()
+    sandbox_raw = (os.environ.get("CYBERTRON_SANDBOX_MODE") or "workspace-write").strip().lower()
+    try:
+        policy = ApprovalPolicy(policy_raw)
+    except ValueError:
+        policy = ApprovalPolicy.UNTRUSTED  # fail closed on unknown values
+    try:
+        sandbox = SandboxMode(sandbox_raw)
+    except ValueError:
+        sandbox = SandboxMode.WORKSPACE_WRITE
+    return AgentLoopConfig(approval_policy=policy, sandbox_mode=sandbox)
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +231,7 @@ class CybertronTaskState:
     objective: str
     workspace_path: str
     state: str = "RUNNING"  # RUNNING | DONE | ERROR
+    mode: str = "plan"  # plan | agentic
     report: TaskReport | None = None
     error: str | None = None
     events: list[TaskEvent] = field(default_factory=list)
@@ -190,6 +250,13 @@ class CybertronService:
         )
         root = os.environ.get("CYBERTRON_WORKSPACE_ROOT") or os.getcwd()
         self._workspace_root = Path(os.path.realpath(root))
+        sessions_dir = os.environ.get("CYBERTRON_SESSIONS_DIR") or str(
+            self._workspace_root / ".tc-cybertron" / "sessions"
+        )
+        try:
+            self._sessions: SessionRecorder | None = SessionRecorder(sessions_dir)
+        except OSError:
+            self._sessions = None
 
     @property
     def approvals(self) -> ApprovalBridge:
@@ -198,6 +265,10 @@ class CybertronService:
     @property
     def workspace_root(self) -> Path:
         return self._workspace_root
+
+    @property
+    def sessions(self) -> SessionRecorder | None:
+        return self._sessions
 
     def resolve_workspace(self, workspace_path: str) -> Path:
         """Workspaces must live under the configured Cybertron root."""
@@ -216,7 +287,10 @@ class CybertronService:
         project_id: str | None = None,
         verification_commands: list[list[str]] | None = None,
         require_approval: bool | None = None,
+        mode: str = "auto",
     ) -> CybertronTaskState:
+        """``mode``: 'auto' (agentic when a tool brain is configured, else
+        plan), 'agentic' (requires a configured brain) or 'plan'."""
         workspace = self.resolve_workspace(workspace_path)
         task_id = uuid.uuid4().hex
         state = CybertronTaskState(
@@ -229,16 +303,54 @@ class CybertronService:
             self._settings.require_approval if require_approval is None else require_approval
         )
 
+        tool_brain = None
+        proposer = None
+        if mode not in ("auto", "agentic", "plan"):
+            raise ValueError(f"unknown mode: {mode}")
+        if mode in ("auto", "agentic"):
+            tool_brain = tool_brain_from_settings(self._settings)
+            if tool_brain is None and mode == "agentic":
+                raise ValueError(
+                    "agentic mode requires a configured Cybertron brain "
+                    "(CYBERTRON_BRAIN_* or PRIMARY_BRAIN_*)"
+                )
+        if tool_brain is None:
+            proposer = proposer_from_settings(self._settings)
+        state.mode = "agentic" if tool_brain is not None else "plan"
+
+        recorder = self._sessions
+
         def sink(tid: str, event: TaskEvent) -> None:
             state.events.append(event)
+            if recorder is not None:
+                try:
+                    recorder.record_event(tid, event)
+                except Exception:  # noqa: BLE001 - recording must never break tasks
+                    pass
+
+        loop_cfg = loop_config_from_env()
+        if not require:
+            # No approval gate exists, so prompting policies are impossible;
+            # fall back to sandbox-only autonomy (Codex `never` semantics).
+            loop_cfg = AgentLoopConfig(
+                approval_policy=ApprovalPolicy.NEVER,
+                sandbox_mode=loop_cfg.sandbox_mode,
+            )
 
         cybertron = Cybertron(
-            config=EngineConfig(require_approval=require),
-            proposer=proposer_from_settings(self._settings),
+            config=EngineConfig(require_approval=require, loop=loop_cfg),
+            proposer=proposer,
+            tool_brain=tool_brain,
             approval_gate=self._approvals.gate_for(task_id) if require else None,
             budget_factory=budget_from_env,
             event_sink=sink,
         )
+
+        if recorder is not None:
+            try:
+                recorder.start(task_id, objective, str(workspace))
+            except Exception:  # noqa: BLE001
+                pass
 
         def run() -> None:
             try:
@@ -251,6 +363,11 @@ class CybertronService:
                 )
                 state.report = report
                 state.state = "DONE"
+                if recorder is not None:
+                    try:
+                        recorder.record_report(task_id, report)
+                    except Exception:  # noqa: BLE001
+                        pass
             except Exception as exc:  # noqa: BLE001 - surfaced, never hidden
                 state.error = str(exc)
                 state.state = "ERROR"

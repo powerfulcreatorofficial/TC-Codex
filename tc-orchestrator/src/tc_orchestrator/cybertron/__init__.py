@@ -21,8 +21,11 @@ data, secrets stay in the control plane, and no stage may convert a failing
 command into a success.
 """
 
+from .agent_loop import AgentLoop, AgentLoopConfig, ModelToolCall, ModelTurn, ToolBrain
+from .apply_patch import apply_any_patch, apply_v4a_patch, is_v4a_patch
 from .budget import BudgetExceeded, TaskBudget
 from .engine import Cybertron, CybertronEngine, EngineConfig
+from .exec_policy import ApprovalPolicy, SandboxMode, assess_command, decide_exec
 from .models import (
     EngineeringTask,
     FinalStatus,
@@ -31,9 +34,13 @@ from .models import (
 )
 from .planning import EngineeringPlan, PlanAction, PlanValidationError, validate_plan
 from .sandbox import LocalProcessSandbox, SandboxLimits, SandboxResult
+from .sessions import SessionRecorder
 from .workspace import SafeWorkspace, WorkspaceSecurityError
 
 __all__ = [
+    "AgentLoop",
+    "AgentLoopConfig",
+    "ApprovalPolicy",
     "BudgetExceeded",
     "Cybertron",
     "CybertronEngine",
@@ -42,14 +49,24 @@ __all__ = [
     "EngineeringTask",
     "FinalStatus",
     "LocalProcessSandbox",
+    "ModelToolCall",
+    "ModelTurn",
     "PlanAction",
     "PlanValidationError",
     "SafeWorkspace",
     "SandboxLimits",
+    "SandboxMode",
     "SandboxResult",
+    "SessionRecorder",
     "Stage",
     "TaskBudget",
     "TaskReport",
+    "ToolBrain",
     "WorkspaceSecurityError",
+    "apply_any_patch",
+    "apply_v4a_patch",
+    "assess_command",
+    "decide_exec",
+    "is_v4a_patch",
     "validate_plan",
 ]

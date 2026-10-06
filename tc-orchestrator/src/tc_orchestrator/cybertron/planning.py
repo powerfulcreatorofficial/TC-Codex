@@ -212,15 +212,19 @@ def build_plan(
     proposer: PlanProposer | None = None,
     failure_evidence: str = "",
     verification_commands: list[list[str]] | None = None,
+    extra_context: str = "",
 ) -> tuple[EngineeringPlan, str | None]:
     """Build a validated plan. Returns (plan, rejection_reason_if_any).
 
     The caller is responsible for charging the model-call budget BEFORE
-    invoking this with a real proposer.
+    invoking this with a real proposer. ``extra_context`` (e.g. advisory
+    AGENTS.md guidance) is appended to the untrusted repository context.
     """
     rejection: str | None = None
     if proposer is not None:
         repo_context = repo_model.context_text() if repo_model else "(no repository model)"
+        if extra_context:
+            repo_context = repo_context + "\n\n" + extra_context
         prompt = PLAN_PROMPT_TEMPLATE.format(
             allowed=", ".join(sorted(_ALLOWED_EXECUTABLES)),
             objective=objective,

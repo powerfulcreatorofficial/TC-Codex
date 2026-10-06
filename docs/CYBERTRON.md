@@ -49,6 +49,27 @@ Hard properties, enforced in code and by tests:
 
 Final statuses: `SUCCESS | PARTIAL | FAILED | BLOCKED`.
 
+## Two execution modes
+
+- **Plan mode** (always available): a model (or deterministic fallback)
+  proposes a validated plan; the engine executes it action by action.
+- **Agentic mode** (when a Cybertron brain is configured): a Codex-style
+  iterative tool-calling loop (`cybertron/agent_loop.py`) drives the ACT
+  stage — the model calls `shell`, `apply_patch` (V4A or unified diff),
+  `read_file`, `list_dir`, `grep`, `glob` and `update_plan` until it
+  reports done. Shell commands pass through the exec policy
+  (`cybertron/exec_policy.py`): approval policies `untrusted |
+  on-request | never`, sandbox modes `read-only | workspace-write`
+  (no `danger-full-access` — deliberately), known-safe command
+  classification, and `with_escalated_permissions` + `justification`
+  escalation routed to the approval gate. Hierarchical `AGENTS.md`
+  project docs are injected as **advisory** guidance
+  (`cybertron/instructions.py`, 32 KiB cap). Both modes end in the same
+  deterministic VERIFY → independent REVIEW → bounded REPAIR pipeline;
+  the loop can never self-certify success. Rollouts are recorded as
+  JSONL sessions (`cybertron/sessions.py`). See
+  `docs/CYBERTRON_VS_CODEX.md` for the full capability map.
+
 ## Planning: model proposal ≠ execution
 
 ```
@@ -143,7 +164,16 @@ CYBERTRON_MAX_TOOL_CALLS      # default 60
 CYBERTRON_MAX_REPAIR_ATTEMPTS # default 3
 CYBERTRON_MAX_WALL_SECONDS    # default 900
 CYBERTRON_MAX_COST_USD        # default 2.0
+CYBERTRON_APPROVAL_POLICY     # untrusted | on-request | never (default untrusted; unknown values fail closed)
+CYBERTRON_SANDBOX_MODE        # read-only | workspace-write (default workspace-write)
+CYBERTRON_SESSIONS_DIR        # JSONL rollouts (default <workspace_root>/.tc-cybertron/sessions)
 ```
+
+Per-task `mode` on `POST /v1/cybertron/tasks`: `auto` (agentic when a
+brain is configured, else plan), `agentic`, or `plan`. When approvals are
+disabled, prompting policies are impossible, so the loop falls back to
+`never` (sandbox-only autonomy) — it never silently self-approves.
+Sessions: `GET /v1/cybertron/sessions`, `GET /v1/cybertron/sessions/{task_id}`.
 
 Cybertron's engineering model routing is independent from TC's
 conversational model; without any configured model it still runs with

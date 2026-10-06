@@ -178,6 +178,14 @@ Durable rules for anyone (human or agent) working on this subsystem:
   and process-group kill in `sandbox.py`, hook/config hardening in
   `gitsafe.py`. Do not claim kernel-level sandboxing — `SandboxResult.isolation`
   must stay honest; container runner is the extension point.
+- Agentic mode (`cybertron/agent_loop.py`, Codex-style tool loop) runs UNDER
+  the gates above, never around them: shell goes through
+  `exec_policy.decide_exec` (approval policies untrusted/on-request/never;
+  sandbox modes read-only/workspace-write — `danger-full-access` is
+  deliberately absent, do not add it), patches through `apply_patch.py`
+  (V4A + unified), `AGENTS.md` project docs are ADVISORY only
+  (`instructions.py`), and the loop's final message never bypasses
+  VERIFY/REVIEW. Capability map: `docs/CYBERTRON_VS_CODEX.md`.
 - HTTP surface: `/v1/cybertron/*`; approval expiry DENIES (never auto-approve).
 - Tests live in `tc-orchestrator/tests/cybertron/` and cover security
   scenarios (traversal, symlink escape, malicious git config/hooks, timeout
